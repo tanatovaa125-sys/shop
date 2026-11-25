@@ -1,0 +1,47 @@
+name: shop
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    shm_size: 256m
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U shop -d shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  app:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql://shop:shop@postgres:5432/shop
+      INSTANCE_NAME: app
+    ports:
+      - "8080:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 200m
+    cpus: 0.5
+    restart: on-failure
+
+  k6:
+    image: grafana/k6:latest
+    profiles: ["test"]
+    environment:
+      BASE_URL: http://app:8000
+    volumes:
+      - ./k6:/scripts:ro
+
+volumes:
+  pgdata:
